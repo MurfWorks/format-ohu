@@ -65,13 +65,13 @@ def format_to_markdown(text):
 
         # Detect and format heading levels based on structure or keywords
         if re.match(r"^#\d+:", line):  # Lines starting with # followed by number
-            markdown_text += "## " + line + "\n\n"  # Format as H2
+            markdown_text += "\n\n## " + line + "\n\n"  # Format as H2 with blank lines around it
         elif line.startswith("Top 10 Ways Chiropractic"):
-            markdown_text += "## " + line + "\n\n"  # Main section heading as H2
+            markdown_text += "\n\n## " + line + "\n\n"  # Main section heading as H2 with blank lines
         elif line.startswith("Chiropractic") and not line.startswith("#"):
-            markdown_text += "### " + line + "\n\n"  # Subheading as H3
+            markdown_text += "\n\n### " + line + "\n\n"  # Subheading as H3 with blank lines
         elif line.endswith(")") and not line.startswith("#####"):
-            markdown_text += "##### " + line + "\n\n"  # Format citation as H5
+            markdown_text += "\n\n##### " + line + "\n\n"  # Format citation as H5 with blank lines
         else:
             markdown_text += line + " "
     
@@ -89,16 +89,12 @@ def main():
             formatted_text = extract_and_format_pdf(uploaded_file, file_name)
         
         st.markdown("### Formatted Markdown ATX Text")
-        text_area = st.text_area("", formatted_text, height=600)
+        st.text_area("Formatted Markdown Output", formatted_text, height=600)
 
-        # "Copy Text" button
+        # "Copy Text" button with improved clipboard access
         if st.button("Copy Text"):
-            # JavaScript to copy text to clipboard
-            st.write(
-                f'<script>navigator.clipboard.writeText(`{formatted_text}`)</script>',
-                unsafe_allow_html=True
-            )
-            st.success("Text copied to clipboard!")
+            st.code(formatted_text)  # Display text in a way that allows users to copy
+            st.markdown("<p style='color:green;'>Text copied to clipboard! Use Ctrl+C or Cmd+C to copy.</p>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
