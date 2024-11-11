@@ -1,20 +1,46 @@
 import streamlit as st
 import fitz  # PyMuPDF for PDF processing
 
+def extract_columns_from_page(page):
+    """
+    Extracts text from a page in left-to-right column order.
+    """
+    blocks = page.get_text("blocks")  # Get text blocks with spatial information
+    # Sort blocks by x-coordinate, which roughly corresponds to column position
+    blocks.sort(key=lambda b: (b[1], b[0]))  # Sort by y (top-to-bottom), then x (left-to-right)
+    
+    # Group text by columns: left, middle, right
+    left_column, middle_column, right_column = "", "", ""
+    page_width = page.rect.width
+    
+    for block in blocks:
+        x0, x1 = block[:2]
+        text = block[4].strip()
+        
+        # Define approximate column areas
+        if x0 < page_width / 3:
+            left_column += text + "\n\n"
+        elif x0 < 2 * page_width / 3:
+            middle_column += text + "\n\n"
+        else:
+            right_column += text + "\n\n"
+    
+    return left_column + middle_column + right_column  # Combine columns in reading order
+
 def extract_and_format_pdf(pdf_file, file_name):
     """
-    Extracts text from PDF and reformats it into Markdown ATX with citations as H5 headers.
+    Extracts text from a multi-column PDF and reformats it to Markdown ATX with preserved structure.
     """
     pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
     
     # Start the formatted text with the H1 heading as the file name
     formatted_text = f"# {file_name}\n\n"
 
-    # Extract text from each page and format
+    # Extract and format each page
     for page_num in range(len(pdf_document)):
         page = pdf_document.load_page(page_num)
-        text = page.get_text()
-        formatted_text += format_to_markdown(text)
+        page_text = extract_columns_from_page(page)
+        formatted_text += format_to_markdown(page_text)
     
     return formatted_text
 
@@ -30,20 +56,12 @@ def format_to_markdown(text):
         line = line.strip()
         
         # Detect heading levels and format accordingly
-        if line.startswith("ADHD - Research Chiro May Alleviate ADHD"):
+        if line.startswith("Top 10 Ways Chiropractic"):
             markdown_text += "## " + line + "\n\n"  # Section heading as H2
-        elif line.startswith("Research Shows Chiropractic"):
+        elif line.startswith("#") and len(line) <= 4:  # Detect top-level numbered headings
             markdown_text += "## " + line + "\n\n"  # Section heading as H2
-        elif line.startswith("The Latest Research"):
+        elif line.startswith("Chiropractic") and not line.startswith("#"):
             markdown_text += "### " + line + "\n\n"  # Subheading as H3
-        elif line.startswith("Previous Research"):
-            markdown_text += "### " + line + "\n\n"  # Subheading as H3
-        elif line.startswith("Case Studies"):
-            markdown_text += "### " + line + "\n\n"  # Subheading as H3
-        elif line.startswith("Theories on How Chiropractic"):
-            markdown_text += "### " + line + "\n\n"  # Subheading as H3
-        elif line.startswith("Help a Child in Your Life"):
-            markdown_text += "## " + line + "\n\n"  # Section heading as H2
         elif line.endswith(")"):
             # Format citation as H5 in parentheses
             markdown_text += "##### " + line + "\n\n"
@@ -64,7 +82,17 @@ def main():
             formatted_text = extract_and_format_pdf(uploaded_file, file_name)
         
         st.markdown("### Formatted Markdown ATX Text")
-        st.text_area("", formatted_text, height=600)
+        text_area = st.text_area("", formatted_text, height=600)
+
+        # "Copy Text" button
+        if st.button("Copy Text"):
+            # JavaScript to copy text to clipboard
+            st.write(
+                f'<script>navigator.clipboard.writeText(`{formatted_text}`)</script>',
+                unsafe_allow_html=True
+            )
+            st.success("Text copied to clipboard!")
 
 if __name__ == "__main__":
     main()
+
