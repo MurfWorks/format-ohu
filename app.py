@@ -1,15 +1,14 @@
 import streamlit as st
 import fitz  # PyMuPDF for PDF processing
+import re
 
 def extract_columns_from_page(page):
     """
-    Extracts text from a page in left-to-right column order.
+    Extracts text from a page in left-to-right column order and removes unnecessary lines.
     """
     blocks = page.get_text("blocks")  # Get text blocks with spatial information
-    # Sort blocks by x-coordinate, which roughly corresponds to column position
     blocks.sort(key=lambda b: (b[1], b[0]))  # Sort by y (top-to-bottom), then x (left-to-right)
     
-    # Group text by columns: left, middle, right
     left_column, middle_column, right_column = "", "", ""
     page_width = page.rect.width
     
@@ -17,7 +16,10 @@ def extract_columns_from_page(page):
         x0, x1 = block[:2]
         text = block[4].strip()
         
-        # Define approximate column areas
+        # Remove unwanted lines
+        if "OPTIMAL HEALTH UNIVERSITY" in text or "●" in text:
+            continue
+        
         if x0 < page_width / 3:
             left_column += text + "\n\n"
         elif x0 < 2 * page_width / 3:
@@ -25,18 +27,24 @@ def extract_columns_from_page(page):
         else:
             right_column += text + "\n\n"
     
-    return left_column + middle_column + right_column  # Combine columns in reading order
+    combined_text = left_column + middle_column + right_column  # Combine columns in reading order
+    return fix_hyphenated_words(combined_text)  # Fix hyphenated line breaks
+
+def fix_hyphenated_words(text):
+    """
+    Fixes hyphenated words that are split across lines, joining them into a single word.
+    """
+    # Regular expression to find hyphenated words at the end of a line
+    text = re.sub(r"(\b\w+)-\s+(\w+\b)", r"\1\2", text)
+    return text
 
 def extract_and_format_pdf(pdf_file, file_name):
     """
     Extracts text from a multi-column PDF and reformats it to Markdown ATX with preserved structure.
     """
     pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    
-    # Start the formatted text with the H1 heading as the file name
-    formatted_text = f"# {file_name}\n\n"
+    formatted_text = f"# {file_name}\n\n"  # Start with the file name as the H1 heading
 
-    # Extract and format each page
     for page_num in range(len(pdf_document)):
         page = pdf_document.load_page(page_num)
         page_text = extract_columns_from_page(page)
@@ -46,7 +54,7 @@ def extract_and_format_pdf(pdf_file, file_name):
 
 def format_to_markdown(text):
     """
-    Converts text from PDF to Markdown ATX format with H2 for section headings,
+    Converts text to Markdown ATX format with H2 for section headings,
     H3 for subheadings, and citations as H5 headers.
     """
     lines = text.splitlines()
@@ -54,17 +62,16 @@ def format_to_markdown(text):
     
     for line in lines:
         line = line.strip()
-        
-        # Detect heading levels and format accordingly
-        if line.startswith("Top 10 Ways Chiropractic"):
-            markdown_text += "## " + line + "\n\n"  # Section heading as H2
-        elif line.startswith("#") and len(line) <= 4:  # Detect top-level numbered headings
-            markdown_text += "## " + line + "\n\n"  # Section heading as H2
+
+        # Detect and format heading levels based on structure or keywords
+        if re.match(r"^#\d+:", line):  # Lines starting with # followed by number
+            markdown_text += "## " + line + "\n\n"  # Format as H2
+        elif line.startswith("Top 10 Ways Chiropractic"):
+            markdown_text += "## " + line + "\n\n"  # Main section heading as H2
         elif line.startswith("Chiropractic") and not line.startswith("#"):
             markdown_text += "### " + line + "\n\n"  # Subheading as H3
-        elif line.endswith(")"):
-            # Format citation as H5 in parentheses
-            markdown_text += "##### " + line + "\n\n"
+        elif line.endswith(")") and not line.startswith("#####"):
+            markdown_text += "##### " + line + "\n\n"  # Format citation as H5
         else:
             markdown_text += line + " "
     
@@ -95,4 +102,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
